@@ -1,0 +1,66 @@
+import boto3
+import datetime
+import time
+
+Tag = 'true'
+Key = 'auto_rds_snapshot'
+
+today = datetime.date.today()
+today_string = today.strftime('%Y-%m-%d')
+
+def lambda_handler(event, context):
+    ec2 = boto3.client('ec2')
+    
+    regions = ec2.describe_regions().get('Regions',[] )
+
+
+    for region in regions:
+        print ("Checking region %s " % region['RegionName'])
+        reg=region['RegionName']
+
+        rds = boto3.client('rds', region_name=reg)
+    
+        response = rds.describe_db_instances()
+               
+        
+        for r in response['DBInstances']:
+              db_instance_arn = r['DBInstanceArn']
+              print (db_instance_arn)
+              
+              r2 = rds.list_tags_for_resource(ResourceName=db_instance_arn)
+              
+              print (r2)
+              
+              for tags in r2['TagList']:
+                   if tags['Key'] == str(Key) and tags['Value'] == str(Tag):
+                       status = r['DBInstanceStatus']
+                       InstanceID = r['DBInstanceIdentifier']
+                       print(InstanceID)
+                       
+                       SNAPSHOT_TIMESTAMP=datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+              
+                       snapshot = InstanceID + '-' + SNAPSHOT_TIMESTAMP + '-yearly-lambda-autosnapshot'
+                       
+                       print (snapshot)
+                       
+                       rds.create_db_snapshot(
+                       DBInstanceIdentifier=(InstanceID),
+                       DBSnapshotIdentifier=snapshot, 
+                       Tags=[
+
+                       { 'Key': 'Compliance',
+                         'Value': 'HIPAA' },
+
+                       { 'Key': 'Cost Center',
+                         'Value': 'V2' },
+                       
+                       { 'Key': 'Use',
+                         'Value': 'databases' },
+                       
+                       { 'Key': 'workload',
+                         'Value': 'production' },
+                       
+                       { 'Key': 'CreatedOn',
+                         'Value': 'Lambda Yearly RDS snapshot ' + today_string }
+                       
+                       ])
